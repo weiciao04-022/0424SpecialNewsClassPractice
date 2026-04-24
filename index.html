@@ -1,1 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2016 立委選舉政治獻金資料庫</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  </head>
+  <body>
+    <header class="hero container">
+      <p class="hero-kicker">政治獻金專題資料庫</p>
+      <h1>2016 立委選舉政治獻金資料庫</h1>
+      <p class="hero-subtitle">
+        從候選人、政黨、選區與捐贈來源，看見選舉背後的金流結構。
+      </p>
+      <p class="hero-desc">
+        選舉不只看得票，也要看誰支持、資金從哪裡來。政治獻金資料能幫助我們觀察不同政黨與地區，是否存在不同的金流模式，進一步理解政治與社會資源之間的關係。
+      </p>
+    </header>
 
+    <main class="container">
+      <section class="search-section card-panel">
+        <div class="search-box">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="輸入候選人、政黨、選區或委員會"
+            aria-label="搜尋候選人資料"
+          />
+          <button id="searchBtn">開始查詢</button>
+        </div>
+        <div class="example-chips" id="exampleChips"></div>
+      </section>
+
+      <section class="summary-section">
+        <h2>Quick Summary</h2>
+        <div class="summary-grid" id="summaryGrid"></div>
+      </section>
+
+      <section class="region-section">
+        <h2>台灣區域分布</h2>
+        <div class="region-grid" id="regionGrid"></div>
+      </section>
+
+      <section class="picks-section">
+        <h2>Editor’s Picks</h2>
+        <div class="picks-grid" id="picksGrid"></div>
+      </section>
+
+      <section class="results-section">
+        <div class="results-header">
+          <h2>Results List</h2>
+          <label class="sort-label" for="sortSelect">
+            排序方式
+            <select id="sortSelect">
+              <option value="income">總收入高到低</option>
+              <option value="votes">得票數高到低</option>
+              <option value="voteRate">得票率高到低</option>
+              <option value="companyCount">捐贈企業數高到低</option>
+              <option value="personalRate">個人捐贈比例高到低</option>
+              <option value="businessRate">營利事業捐贈比例高到低</option>
+            </select>
+          </label>
+        </div>
+        <p class="active-filter" id="activeFilterText">目前篩選：全部資料</p>
+        <div class="results-list" id="resultsList"></div>
+        <div class="load-more-wrap">
+          <button id="loadMoreBtn">載入更多</button>
+        </div>
+      </section>
+    </main>
+
+    <template id="resultCardTemplate">
+      <article class="result-card">
+        <div class="party-bar"></div>
+        <div class="card-body">
+          <div class="card-title-row">
+            <h3 class="name"></h3>
+            <span class="elected-tag"></span>
+          </div>
+          <p class="meta"></p>
+          <div class="metrics"></div>
+        </div>
+      </article>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>
