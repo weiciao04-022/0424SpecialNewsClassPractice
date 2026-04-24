@@ -1,5 +1,5 @@
 // 2016 政治獻金資料庫 - 互動腳本
-// 功能：CSV 載入、數值清理、搜尋、排序、區域篩選、count-up、進場動畫、載入更多。
+// 功能：CSV 載入、數值清理、搜尋、排序、區域篩選、進階篩選、count-up、進場動畫、載入更多。
 
 const PARTY_COLOR = {
   民主進步黨: '#00C853',
@@ -16,6 +16,16 @@ const REGIONS = {
   離島: ['澎湖縣', '金門縣', '連江縣'],
 };
 
+const DONATION_FIELDS = {
+  personalIncome: { label: '個人捐贈收入', amountKey: 'personalIncome', rateKey: 'personalRate' },
+  businessIncome: { label: '營利事業捐贈收入', amountKey: 'businessIncome', rateKey: 'businessRate' },
+  partyDonationIncome: { label: '政黨捐贈收入', amountKey: 'partyDonationIncome' },
+  groupDonationIncome: { label: '人民團體捐贈收入', amountKey: 'groupDonationIncome' },
+  anonymousDonationIncome: { label: '匿名捐贈收入', amountKey: 'anonymousDonationIncome' },
+  otherIncome: { label: '其他收入', amountKey: 'otherIncome' },
+  overThirtyThousandIncome: { label: '超過三萬元之收入', amountKey: 'overThirtyThousandIncome' },
+};
+
 const EXAMPLES = ['民主進步黨', '中國國民黨', '臺北市', '高雄市', '營利事業捐贈', '個人捐贈'];
 
 const app = {
@@ -24,12 +34,18 @@ const app = {
   search: '',
   sort: 'income',
   region: '',
+  city: '',
+  party: '',
+  donationType: '',
   visible: 12,
 };
 
 const el = {
   searchInput: document.getElementById('searchInput'),
   searchBtn: document.getElementById('searchBtn'),
+  cityFilter: document.getElementById('cityFilter'),
+  partyFilter: document.getElementById('partyFilter'),
+  donationFilter: document.getElementById('donationFilter'),
   exampleChips: document.getElementById('exampleChips'),
   summaryGrid: document.getElementById('summaryGrid'),
   regionGrid: document.getElementById('regionGrid'),
@@ -81,6 +97,11 @@ function parseRow(r) {
     personalIncome: num(r['個人捐贈收入']),
     businessRate: pct(r['營利事業捐贈比例']),
     businessIncome: num(r['營利事業捐贈收入']),
+    partyDonationIncome: num(r['政黨捐贈收入']),
+    groupDonationIncome: num(r['人民團體捐贈收入']),
+    anonymousDonationIncome: num(r['匿名捐贈收入']),
+    otherIncome: num(r['其他收入']),
+    overThirtyThousandIncome: num(r['超過三萬元之收入']),
   };
 }
 
@@ -91,6 +112,7 @@ function loadCSV() {
     skipEmptyLines: true,
     complete: ({ data }) => {
       app.all = data.map(parseRow).filter((d) => d.name);
+      populateDynamicFilters();
       renderExamples();
       renderSummary();
       renderRegions();
@@ -100,6 +122,25 @@ function loadCSV() {
     error: () => {
       el.resultsList.innerHTML = '<article class="result-card glass">CSV 讀取失敗，請確認 2016.csv 與檔案在同一層。</article>';
     },
+  });
+}
+
+function populateDynamicFilters() {
+  const uniqueCities = [...new Set(app.all.map((row) => row.area).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  const uniqueParties = [...new Set(app.all.map((row) => row.party).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+
+  uniqueCities.forEach((city) => {
+    const opt = document.createElement('option');
+    opt.value = city;
+    opt.textContent = city;
+    el.cityFilter.appendChild(opt);
+  });
+
+  uniqueParties.forEach((party) => {
+    const opt = document.createElement('option');
+    opt.value = party;
+    opt.textContent = party;
+    el.partyFilter.appendChild(opt);
   });
 }
 
@@ -244,8 +285,24 @@ function inSearch(row) {
   return [row.name, row.party, row.area, row.committee].some((v) => String(v).toLowerCase().includes(q));
 }
 
+function inCity(row) {
+  if (!app.city) return true;
+  return row.area === app.city;
+}
+
+function inParty(row) {
+  if (!app.party) return true;
+  return row.party === app.party;
+}
+
+function inDonationType(row) {
+  if (!app.donationType) return true;
+  const config = DONATION_FIELDS[app.donationType];
+  return row[config.amountKey] > 0;
+}
+
 function sortRows(rows) {
-  const by = {
+  const baseSort = {
     income: (a, b) => b.totalIncome - a.totalIncome,
     votes: (a, b) => b.votes - a.votes,
     voteRate: (a, b) => b.voteRate - a.voteRate,
@@ -254,7 +311,15 @@ function sortRows(rows) {
     businessRate: (a, b) => b.businessRate - a.businessRate,
   }[app.sort];
 
-  return [...rows].sort(by);
+  if (!app.donationType) {
+    return [...rows].sort(baseSort);
+  }
+
+  const donationAmountKey = DONATION_FIELDS[app.donationType].amountKey;
+  return [...rows].sort((a, b) => {
+    const donationDiff = (b[donationAmountKey] || 0) - (a[donationAmountKey] || 0);
+    return donationDiff !== 0 ? donationDiff : baseSort(a, b);
+  });
 }
 
 function partyColor(party) {
@@ -262,10 +327,66 @@ function partyColor(party) {
 }
 
 function updateList() {
-  const rows = sortRows(app.all.filter((row) => inSearch(row) && inRegion(row)));
+  const rows = sortRows(
+    app.all.filter(
+      (row) => inSearch(row) && inRegion(row) && inCity(row) && inParty(row) && inDonationType(row)
+    )
+  );
+
   app.filtered = rows;
-  el.activeFilterText.textContent = `目前篩選：${app.search || '全部關鍵字'}${app.region ? `｜${app.region}` : ''}（${fmt(rows.length)} 筆）`;
+
+  const filterParts = [
+    `關鍵字：${app.search || '全部'}`,
+    `縣市：${app.city || '全部縣市'}`,
+    `政黨：${app.party || '全部政黨'}`,
+    `獻金分類：${DONATION_FIELDS[app.donationType]?.label || '全部獻金分類'}`,
+    `區域：${app.region || '全部區域'}`,
+  ];
+
+  el.activeFilterText.textContent = `目前篩選：${filterParts.join('｜')}（${fmt(rows.length)} 筆）`;
   renderResults();
+}
+
+function buildDonationHighlight(row) {
+  if (!app.donationType) {
+    return null;
+  }
+
+  const config = DONATION_FIELDS[app.donationType];
+  const amount = fmt(row[config.amountKey]);
+
+  if (config.rateKey) {
+    const rate = row[config.rateKey].toFixed(2);
+    return `${config.label}：${amount} 元（${rate}%）`;
+  }
+
+  return `${config.label}：${amount} 元`;
+}
+
+function renderDefaultStats(row) {
+  return `
+    <div>得票數：${fmt(row.votes)}</div>
+    <div>得票率：${row.voteRate.toFixed(2)}%</div>
+    <div>總收入：${fmt(row.totalIncome)} 元</div>
+    <div>個人捐贈比例：${row.personalRate.toFixed(2)}%</div>
+    <div>營利事業捐贈比例：${row.businessRate.toFixed(2)}%</div>
+    <div>是否當選：${row.elected ? '是' : '否'}</div>
+  `;
+}
+
+function renderDonationStats(row) {
+  const config = DONATION_FIELDS[app.donationType];
+  const amount = fmt(row[config.amountKey]);
+  const ratePart = config.rateKey ? `${row[config.rateKey].toFixed(2)}%` : '—';
+
+  return `
+    <div>得票數：${fmt(row.votes)}</div>
+    <div>得票率：${row.voteRate.toFixed(2)}%</div>
+    <div>${config.label}：${amount} 元</div>
+    <div>${config.rateKey ? `${config.label}比例：${ratePart}` : '該分類比例：—'}</div>
+    <div>總收入：${fmt(row.totalIncome)} 元</div>
+    <div>是否當選：${row.elected ? '是' : '否'}</div>
+  `;
 }
 
 function renderResults() {
@@ -276,19 +397,20 @@ function renderResults() {
     const node = el.cardTemplate.content.cloneNode(true);
     const card = node.querySelector('.result-card');
     const partyBadge = node.querySelector('.party-badge');
+    const highlight = node.querySelector('.donation-highlight');
 
     node.querySelector('.name').textContent = row.name;
     partyBadge.textContent = row.party;
     partyBadge.style.background = partyColor(row.party);
     node.querySelector('.district').textContent = row.area;
-    node.querySelector('.stats').innerHTML = `
-      <div>得票數：${fmt(row.votes)}</div>
-      <div>得票率：${row.voteRate.toFixed(2)}%</div>
-      <div>總收入：${fmt(row.totalIncome)} 元</div>
-      <div>個人捐贈比例：${row.personalRate.toFixed(2)}%</div>
-      <div>營利事業捐贈比例：${row.businessRate.toFixed(2)}%</div>
-      <div>是否當選：${row.elected ? '是' : '否'}</div>
-    `;
+
+    node.querySelector('.stats').innerHTML = app.donationType ? renderDonationStats(row) : renderDefaultStats(row);
+
+    const donationHighlightText = buildDonationHighlight(row);
+    if (donationHighlightText) {
+      highlight.hidden = false;
+      highlight.textContent = `重點線索：${donationHighlightText}`;
+    }
 
     if (row.elected) {
       node.querySelector('.winner-tag').hidden = false;
@@ -302,7 +424,6 @@ function renderResults() {
   const hasMore = app.visible < app.filtered.length;
   el.loadMoreBtn.hidden = !hasMore;
   el.allLoadedMsg.hidden = hasMore;
-
   observeReveal();
 }
 
@@ -348,6 +469,24 @@ function bindEvents() {
 
   el.searchBtn.addEventListener('click', () => {
     app.search = el.searchInput.value.trim();
+    app.visible = 12;
+    updateList();
+  });
+
+  el.cityFilter.addEventListener('change', (e) => {
+    app.city = e.target.value;
+    app.visible = 12;
+    updateList();
+  });
+
+  el.partyFilter.addEventListener('change', (e) => {
+    app.party = e.target.value;
+    app.visible = 12;
+    updateList();
+  });
+
+  el.donationFilter.addEventListener('change', (e) => {
+    app.donationType = e.target.value;
     app.visible = 12;
     updateList();
   });

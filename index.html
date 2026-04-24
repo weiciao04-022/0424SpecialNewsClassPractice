@@ -38,6 +38,26 @@
           />
           <button id="searchBtn" class="shine-btn">揭開金流</button>
         </div>
+
+        <div class="filter-bar">
+          <select id="cityFilter" aria-label="縣市篩選">
+            <option value="">全部縣市</option>
+          </select>
+          <select id="partyFilter" aria-label="政黨篩選">
+            <option value="">全部政黨</option>
+          </select>
+          <select id="donationFilter" aria-label="獻金分類篩選">
+            <option value="">全部獻金分類</option>
+            <option value="personalIncome">個人捐贈收入</option>
+            <option value="businessIncome">營利事業捐贈收入</option>
+            <option value="partyDonationIncome">政黨捐贈收入</option>
+            <option value="groupDonationIncome">人民團體捐贈收入</option>
+            <option value="anonymousDonationIncome">匿名捐贈收入</option>
+            <option value="otherIncome">其他收入</option>
+            <option value="overThirtyThousandIncome">超過三萬元之收入</option>
+          </select>
+        </div>
+
         <div id="exampleChips" class="chips" aria-label="範例查詢"></div>
       </section>
     </header>
@@ -91,6 +111,7 @@
         </div>
         <p class="district"></p>
         <div class="stats"></div>
+        <div class="donation-highlight" hidden></div>
         <span class="winner-tag" hidden>當選</span>
       </article>
     </template>
