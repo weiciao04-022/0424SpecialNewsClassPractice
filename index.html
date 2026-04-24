@@ -1,1 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2016 政治獻金資料庫</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  </head>
+  <body>
+    <div class="bg-noise" aria-hidden="true"></div>
 
+    <header class="hero container">
+      <p class="kicker">Political Funding Observatory</p>
+      <h1>2016 政治獻金資料庫</h1>
+      <p class="subtitle">一場選舉，不只由選票決定，也由金流推動。</p>
+      <p class="narrative">
+        從候選人、政黨到捐贈來源，這個資料庫帶你進入 2016 立委選舉的金流結構：誰獲得更多支持、哪種資金來源最關鍵、哪些區域模式最鮮明。
+      </p>
+
+      <section class="search-panel glass reveal">
+        <div class="search-row">
+          <input id="searchInput" type="text" placeholder="搜尋候選人、政黨、選區、委員會……" />
+          <button id="searchBtn" class="primary-btn">查詢資料庫</button>
+        </div>
+        <div class="filter-grid">
+          <select id="cityFilter"><option value="">全部縣市</option></select>
+          <select id="partyFilter"><option value="">全部政黨</option></select>
+          <select id="donationFilter">
+            <option value="">全部獻金分類</option>
+            <option value="personalIncome">個人捐贈收入</option>
+            <option value="businessIncome">營利事業捐贈收入</option>
+            <option value="partyDonationIncome">政黨捐贈收入</option>
+            <option value="groupDonationIncome">人民團體捐贈收入</option>
+            <option value="anonymousDonationIncome">匿名捐贈收入</option>
+            <option value="otherIncome">其他收入</option>
+            <option value="overThirtyThousandIncome">超過三萬元之收入</option>
+          </select>
+        </div>
+        <div id="exampleChips" class="chips"></div>
+      </section>
+    </header>
+
+    <main class="container">
+      <section class="section-block reveal">
+        <h2>Quick Summary</h2>
+        <div id="summaryGrid" class="summary-grid"></div>
+      </section>
+
+      <section class="section-block reveal">
+        <h2>台灣五大區分布</h2>
+        <div id="regionGrid" class="region-grid"></div>
+      </section>
+
+      <section class="section-block" id="resultsSection">
+        <div class="results-header">
+          <h2>搜尋結果</h2>
+          <label class="sort-wrap">
+            排序
+            <select id="sortSelect">
+              <option value="income">總收入高到低</option>
+              <option value="votes">得票數高到低</option>
+              <option value="voteRate">得票率高到低</option>
+              <option value="companyCount">捐贈企業數高到低</option>
+              <option value="personalRate">個人捐贈比例高到低</option>
+              <option value="businessRate">營利事業捐贈比例高到低</option>
+            </select>
+          </label>
+        </div>
+        <p id="activeFilterText" class="active-filter">目前顯示：全部候選人</p>
+        <div id="resultsList" class="results-grid"></div>
+        <div class="load-wrap">
+          <button id="loadMoreBtn" class="primary-btn">載入更多</button>
+          <p id="allLoadedMsg" hidden>所有金流線索已展開</p>
+        </div>
+      </section>
+
+      <section id="candidateDetail" class="candidate-detail hidden"></section>
+    </main>
+
+    <template id="resultCardTemplate">
+      <article class="result-card glass reveal">
+        <div class="card-head">
+          <h3 class="name"></h3>
+          <span class="party-badge"></span>
+        </div>
+        <p class="district"></p>
+        <div class="stats"></div>
+        <div class="focus-donation" hidden></div>
+        <div class="card-actions">
+          <span class="winner-tag" hidden>當選</span>
+          <button class="detail-btn">查看個人資料</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>
