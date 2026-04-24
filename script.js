@@ -1,14 +1,14 @@
-// 2016 立委政治獻金資料庫前端邏輯
-// 使用 PapaParse 解析 CSV，並提供搜尋、排序、分區篩選、載入更多等功能。
+// 2016 政治獻金資料庫 - 互動腳本
+// 功能：CSV 載入、數值清理、搜尋、排序、區域篩選、count-up、進場動畫、載入更多。
 
-const PARTY_COLORS = {
-  民主進步黨: '#1B8F4D',
-  中國國民黨: '#005BAC',
-  親民黨: '#F39800',
-  時代力量: '#F6C400',
+const PARTY_COLOR = {
+  民主進步黨: '#00C853',
+  中國國民黨: '#2979FF',
+  親民黨: '#FF9800',
+  時代力量: '#FFD600',
 };
 
-const REGION_GROUPS = {
+const REGIONS = {
   北部: ['臺北市', '新北市', '基隆市', '桃園市', '新竹市', '新竹縣', '宜蘭縣'],
   中部: ['苗栗縣', '臺中市', '彰化縣', '南投縣', '雲林縣'],
   南部: ['嘉義市', '嘉義縣', '臺南市', '高雄市', '屏東縣'],
@@ -16,78 +16,71 @@ const REGION_GROUPS = {
   離島: ['澎湖縣', '金門縣', '連江縣'],
 };
 
-const EXAMPLE_QUERIES = ['民主進步黨', '中國國民黨', '臺北市', '高雄市', '司法法制', '營利事業捐贈'];
+const EXAMPLES = ['民主進步黨', '中國國民黨', '臺北市', '高雄市', '營利事業捐贈', '個人捐贈'];
 
-const state = {
-  data: [],
+const app = {
+  all: [],
   filtered: [],
-  searchTerm: '',
-  selectedRegion: '',
-  sortBy: 'income',
-  visibleCount: 12,
+  search: '',
+  sort: 'income',
+  region: '',
+  visible: 12,
 };
 
-const els = {
+const el = {
   searchInput: document.getElementById('searchInput'),
   searchBtn: document.getElementById('searchBtn'),
   exampleChips: document.getElementById('exampleChips'),
   summaryGrid: document.getElementById('summaryGrid'),
   regionGrid: document.getElementById('regionGrid'),
   picksGrid: document.getElementById('picksGrid'),
-  resultsList: document.getElementById('resultsList'),
-  loadMoreBtn: document.getElementById('loadMoreBtn'),
   sortSelect: document.getElementById('sortSelect'),
   activeFilterText: document.getElementById('activeFilterText'),
-  resultCardTemplate: document.getElementById('resultCardTemplate'),
+  resultsList: document.getElementById('resultsList'),
+  loadMoreBtn: document.getElementById('loadMoreBtn'),
+  allLoadedMsg: document.getElementById('allLoadedMsg'),
+  cardTemplate: document.getElementById('resultCardTemplate'),
 };
 
-function toNumber(value) {
-  if (value == null) return 0;
-  const cleaned = String(value).replace(/,/g, '').replace(/"/g, '').trim();
-  const num = Number(cleaned);
-  return Number.isFinite(num) ? num : 0;
+function num(v) {
+  const cleaned = String(v ?? '').replace(/,/g, '').replace(/"/g, '').trim();
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function toPercent(value) {
-  if (value == null) return 0;
-  const cleaned = String(value).replace('%', '').trim();
-  const num = Number(cleaned);
-  return Number.isFinite(num) ? num : 0;
+function pct(v) {
+  const cleaned = String(v ?? '').replace('%', '').trim();
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function formatNumber(num) {
-  return Math.round(num || 0).toLocaleString('zh-TW');
+function fmt(n) {
+  return Math.round(n || 0).toLocaleString('zh-TW');
 }
 
-function getPartyColor(party) {
-  return PARTY_COLORS[party] || '#777777';
+function getCity(area = '') {
+  const m = area.match(
+    /(臺北市|台北市|新北市|基隆市|桃園市|新竹市|新竹縣|宜蘭縣|苗栗縣|臺中市|台中市|彰化縣|南投縣|雲林縣|嘉義市|嘉義縣|臺南市|台南市|高雄市|屏東縣|花蓮縣|臺東縣|台東縣|澎湖縣|金門縣|連江縣)/
+  );
+  return m ? m[1].replace('台', '臺') : area;
 }
 
-function extractCity(area = '') {
-  const cityMatch = area.match(/(臺北市|台北市|新北市|基隆市|桃園市|新竹市|新竹縣|宜蘭縣|苗栗縣|臺中市|台中市|彰化縣|南投縣|雲林縣|嘉義市|嘉義縣|臺南市|台南市|高雄市|屏東縣|花蓮縣|臺東縣|台東縣|澎湖縣|金門縣|連江縣)/);
-  if (!cityMatch) return area;
-  return cityMatch[1].replace('台', '臺');
-}
-
-function parseRow(row) {
+function parseRow(r) {
   return {
-    area: row['地區'] || '',
-    city: extractCity(row['地區'] || ''),
-    name: row['姓名'] || '',
-    votes: toNumber(row['得票數']),
-    party: row['推薦政黨'] || '無黨籍或其他',
-    voteRate: toPercent(row['得票率']),
-    electedMark: row['當選註記'] || '',
-    incumbent: row['是否現任'] || '',
-    committee: row['委員會'] || '',
-    gender: row['性別'] || '',
-    birthYear: row['出生年次'] || '',
-    companyCount: toNumber(row['捐贈企業數']),
-    totalIncome: toNumber(row['總收入']),
-    personalIncome: toNumber(row['個人捐贈收入']),
-    personalRate: toPercent(row['個人捐贈比例']),
-    businessIncome: toNumber(row['營利事業捐贈收入']),
-    businessRate: toPercent(row['營利事業捐贈比例']),
+    name: r['姓名'] || '',
+    party: r['推薦政黨'] || '無黨籍／其他',
+    area: r['地區'] || '',
+    city: getCity(r['地區'] || ''),
+    committee: r['委員會'] || '',
+    votes: num(r['得票數']),
+    voteRate: pct(r['得票率']),
+    elected: r['當選註記'] === '*',
+    companyCount: num(r['捐贈企業數']),
+    totalIncome: num(r['總收入']),
+    personalRate: pct(r['個人捐贈比例']),
+    personalIncome: num(r['個人捐贈收入']),
+    businessRate: pct(r['營利事業捐贈比例']),
+    businessIncome: num(r['營利事業捐贈收入']),
   };
 }
 
@@ -97,213 +90,276 @@ function loadCSV() {
     header: true,
     skipEmptyLines: true,
     complete: ({ data }) => {
-      state.data = data.map(parseRow).filter((d) => d.name);
-      state.filtered = [...state.data];
-      renderExampleChips();
+      app.all = data.map(parseRow).filter((d) => d.name);
+      renderExamples();
       renderSummary();
       renderRegions();
       renderPicks();
-      applyFiltersAndRender();
+      updateList();
     },
     error: () => {
-      els.resultsList.innerHTML = '<p>資料載入失敗，請確認 2016.csv 與網頁位於同一資料夾。</p>';
+      el.resultsList.innerHTML = '<article class="result-card glass">CSV 讀取失敗，請確認 2016.csv 與檔案在同一層。</article>';
     },
   });
 }
 
-function renderExampleChips() {
-  els.exampleChips.innerHTML = '';
-  EXAMPLE_QUERIES.forEach((query) => {
+function renderExamples() {
+  el.exampleChips.innerHTML = '';
+  EXAMPLES.forEach((text) => {
     const btn = document.createElement('button');
     btn.className = 'chip';
-    btn.textContent = query;
+    btn.textContent = text;
     btn.addEventListener('click', () => {
-      els.searchInput.value = query;
-      state.searchTerm = query.trim();
-      state.visibleCount = 12;
-      applyFiltersAndRender();
+      el.searchInput.value = text;
+      app.search = text;
+      app.visible = 12;
+      updateList();
     });
-    els.exampleChips.appendChild(btn);
+    el.exampleChips.appendChild(btn);
   });
 }
 
 function renderSummary() {
-  const totalCandidates = state.data.length;
-  const totalIncome = state.data.reduce((sum, d) => sum + d.totalIncome, 0);
-  const avgIncome = totalCandidates ? totalIncome / totalCandidates : 0;
-  const maxIncomeCandidate = [...state.data].sort((a, b) => b.totalIncome - a.totalIncome)[0];
-  const maxCompanyCandidate = [...state.data].sort((a, b) => b.companyCount - a.companyCount)[0];
+  const totalCount = app.all.length;
+  const totalIncome = app.all.reduce((s, d) => s + d.totalIncome, 0);
+  const avgIncome = totalCount ? totalIncome / totalCount : 0;
+  const maxIncome = [...app.all].sort((a, b) => b.totalIncome - a.totalIncome)[0];
+  const maxCompany = [...app.all].sort((a, b) => b.companyCount - a.companyCount)[0];
 
   const cards = [
-    ['資料候選人總數', `${formatNumber(totalCandidates)} 人`],
-    ['總政治獻金收入', `${formatNumber(totalIncome)} 元`],
-    ['平均總收入', `${formatNumber(avgIncome)} 元`],
-    ['最高收入候選人', `${maxIncomeCandidate?.name || '-'}（${formatNumber(maxIncomeCandidate?.totalIncome)} 元）`],
-    ['捐贈企業數最多候選人', `${maxCompanyCandidate?.name || '-'}（${formatNumber(maxCompanyCandidate?.companyCount)} 家）`],
+    { title: '候選人總數', value: totalCount, unit: '人', type: 'number' },
+    { title: '總政治獻金收入', value: totalIncome, unit: '元', type: 'number' },
+    { title: '平均總收入', value: avgIncome, unit: '元', type: 'number' },
+    {
+      title: '最高收入候選人',
+      valueText: `${maxIncome?.name || '-'}（${fmt(maxIncome?.totalIncome)} 元）`,
+      type: 'text',
+    },
+    {
+      title: '捐贈企業數最多候選人',
+      valueText: `${maxCompany?.name || '-'}（${fmt(maxCompany?.companyCount)} 家）`,
+      type: 'text',
+    },
   ];
 
-  els.summaryGrid.innerHTML = cards
-    .map(
-      ([label, value]) =>
-        `<article><div class="summary-label">${label}</div><div class="summary-value">${value}</div></article>`
-    )
-    .join('');
+  el.summaryGrid.innerHTML = '';
+  cards.forEach((c) => {
+    const article = document.createElement('article');
+    article.className = 'summary-card glass reveal';
+    article.innerHTML = `<div class="summary-title">${c.title}</div><div class="summary-value"></div>`;
+
+    const valueNode = article.querySelector('.summary-value');
+    if (c.type === 'number') {
+      animateCount(valueNode, 0, c.value, c.unit);
+    } else {
+      valueNode.textContent = c.valueText;
+    }
+
+    el.summaryGrid.appendChild(article);
+  });
+
+  observeReveal();
 }
 
 function renderRegions() {
-  els.regionGrid.innerHTML = '';
-  Object.entries(REGION_GROUPS).forEach(([regionName, cities]) => {
-    const records = state.data.filter((d) => cities.includes(d.city));
-    const income = records.reduce((sum, d) => sum + d.totalIncome, 0);
+  el.regionGrid.innerHTML = '';
+  Object.entries(REGIONS).forEach(([region, cities]) => {
+    const rows = app.all.filter((d) => cities.includes(d.city));
+    const income = rows.reduce((s, d) => s + d.totalIncome, 0);
+    const avg = rows.length ? income / rows.length : 0;
 
     const card = document.createElement('article');
-    card.className = 'region-card';
-    if (state.selectedRegion === regionName) card.classList.add('active');
+    card.className = `region-card glass reveal ${app.region === region ? 'active' : ''}`;
     card.innerHTML = `
-      <div class="region-name">${regionName}</div>
-      <div class="small-muted">${cities.join('、')}</div>
-      <div>候選人：${formatNumber(records.length)} 人</div>
-      <div>總收入：${formatNumber(income)} 元</div>
+      <div class="region-name">${region}</div>
+      <div class="muted">候選人數：${fmt(rows.length)} 人</div>
+      <div>總收入：${fmt(income)} 元</div>
+      <div>平均收入：${fmt(avg)} 元</div>
     `;
 
     card.addEventListener('click', () => {
-      state.selectedRegion = state.selectedRegion === regionName ? '' : regionName;
-      state.visibleCount = 12;
+      app.region = app.region === region ? '' : region;
+      app.visible = 12;
       renderRegions();
-      applyFiltersAndRender();
+      updateList();
     });
 
-    els.regionGrid.appendChild(card);
+    el.regionGrid.appendChild(card);
   });
+
+  observeReveal();
 }
 
 function renderPicks() {
-  const topIncome = [...state.data].sort((a, b) => b.totalIncome - a.totalIncome)[0];
-  const topBusiness = [...state.data].sort((a, b) => b.businessIncome - a.businessIncome)[0];
-  const topPersonalRate = [...state.data].sort((a, b) => b.personalRate - a.personalRate)[0];
+  const topIncome = [...app.all].sort((a, b) => b.totalIncome - a.totalIncome)[0];
+  const topBusiness = [...app.all].sort((a, b) => b.businessIncome - a.businessIncome)[0];
+  const topPersonalRate = [...app.all].sort((a, b) => b.personalRate - a.personalRate)[0];
 
   const picks = [
     {
-      title: '總收入最高',
-      person: topIncome,
-      metric: `總收入 ${formatNumber(topIncome?.totalIncome)} 元`,
-      note: '在政治獻金規模上領先，反映其募款能力與組織動員。',
+      label: '總收入最高',
+      row: topIncome,
+      key: `總收入 ${fmt(topIncome?.totalIncome)} 元`,
+      note: '這名候選人的金流規模位居資料庫前列，值得進一步追蹤其資金來源結構。',
     },
     {
-      title: '營利事業捐贈收入最高',
-      person: topBusiness,
-      metric: `營利事業捐贈收入 ${formatNumber(topBusiness?.businessIncome)} 元`,
-      note: '企業來源占比較高，顯示其與產業界連結較強。',
+      label: '營利事業捐贈收入最高',
+      row: topBusiness,
+      key: `營利事業捐贈收入 ${fmt(topBusiness?.businessIncome)} 元`,
+      note: '企業資金比重偏高，呈現其與特定產業網絡可能的高連動性。',
     },
     {
-      title: '個人捐贈比例最高',
-      person: topPersonalRate,
-      metric: `個人捐贈比例 ${topPersonalRate?.personalRate?.toFixed(2) || 0}%`,
-      note: '個人小額或個人來源占比突出，具備不同募款結構。',
+      label: '個人捐贈比例最高',
+      row: topPersonalRate,
+      key: `個人捐贈比例 ${topPersonalRate?.personalRate?.toFixed(2) || '0.00'}%`,
+      note: '以個人捐贈為主體，顯示其募款結構與主流候選人有明顯差異。',
     },
   ];
 
-  els.picksGrid.innerHTML = picks
+  el.picksGrid.innerHTML = picks
     .map(
-      ({ title, person, metric, note }) => `
-      <article class="pick-card">
-        <div class="summary-label">${title}</div>
-        <div class="summary-value">${person?.name || '-'}</div>
-        <div>${person?.party || '-'}｜${person?.area || '-'}</div>
-        <div class="small-muted">${metric}</div>
-        <p>${note}</p>
+      (p) => `
+      <article class="pick-card glass reveal">
+        <div class="summary-title">精選：${p.label}</div>
+        <div class="summary-value">${p.row?.name || '-'}</div>
+        <div>${p.row?.party || '-'}｜${p.row?.area || '-'}</div>
+        <div class="muted">${p.key}</div>
+        <p>${p.note}</p>
       </article>
     `
     )
     .join('');
+
+  observeReveal();
 }
 
-function matchesSearch(item, term) {
-  if (!term) return true;
-  const keyword = term.toLowerCase();
-  return [item.name, item.party, item.area, item.committee].some((field) =>
-    String(field || '').toLowerCase().includes(keyword)
-  );
+function inRegion(row) {
+  if (!app.region) return true;
+  return REGIONS[app.region]?.includes(row.city);
 }
 
-function matchesRegion(item, regionName) {
-  if (!regionName) return true;
-  return REGION_GROUPS[regionName]?.includes(item.city);
+function inSearch(row) {
+  if (!app.search) return true;
+  const q = app.search.toLowerCase();
+  return [row.name, row.party, row.area, row.committee].some((v) => String(v).toLowerCase().includes(q));
 }
 
-function sortRecords(records) {
-  const sorter = {
+function sortRows(rows) {
+  const by = {
     income: (a, b) => b.totalIncome - a.totalIncome,
     votes: (a, b) => b.votes - a.votes,
     voteRate: (a, b) => b.voteRate - a.voteRate,
     companyCount: (a, b) => b.companyCount - a.companyCount,
     personalRate: (a, b) => b.personalRate - a.personalRate,
     businessRate: (a, b) => b.businessRate - a.businessRate,
-  }[state.sortBy];
+  }[app.sort];
 
-  return [...records].sort(sorter);
+  return [...rows].sort(by);
 }
 
-function applyFiltersAndRender() {
-  const filtered = state.data.filter(
-    (item) => matchesSearch(item, state.searchTerm) && matchesRegion(item, state.selectedRegion)
-  );
-  state.filtered = sortRecords(filtered);
-  const filterMsg = state.searchTerm || state.selectedRegion
-    ? `目前篩選：關鍵字「${state.searchTerm || '（無）'}」${state.selectedRegion ? `，區域「${state.selectedRegion}」` : ''}`
-    : '目前篩選：全部資料';
-  els.activeFilterText.textContent = `${filterMsg}（共 ${formatNumber(state.filtered.length)} 筆）`;
+function partyColor(party) {
+  return PARTY_COLOR[party] || '#9E9E9E';
+}
+
+function updateList() {
+  const rows = sortRows(app.all.filter((row) => inSearch(row) && inRegion(row)));
+  app.filtered = rows;
+  el.activeFilterText.textContent = `目前篩選：${app.search || '全部關鍵字'}${app.region ? `｜${app.region}` : ''}（${fmt(rows.length)} 筆）`;
   renderResults();
 }
 
 function renderResults() {
-  const visibleRecords = state.filtered.slice(0, state.visibleCount);
-  els.resultsList.innerHTML = '';
+  const visibleRows = app.filtered.slice(0, app.visible);
+  el.resultsList.innerHTML = '';
 
-  visibleRecords.forEach((item) => {
-    const node = els.resultCardTemplate.content.cloneNode(true);
-    node.querySelector('.party-bar').style.background = getPartyColor(item.party);
-    node.querySelector('.name').textContent = item.name;
-    node.querySelector('.elected-tag').textContent = item.electedMark === '*' ? '當選' : '未當選';
-    node.querySelector('.meta').textContent = `${item.party}｜${item.area}｜委員會：${item.committee || '未標示'}`;
+  visibleRows.forEach((row) => {
+    const node = el.cardTemplate.content.cloneNode(true);
+    const card = node.querySelector('.result-card');
+    const partyBadge = node.querySelector('.party-badge');
 
-    node.querySelector('.metrics').innerHTML = `
-      <div>得票數：${formatNumber(item.votes)}</div>
-      <div>得票率：${item.voteRate.toFixed(2)}%</div>
-      <div>總收入：${formatNumber(item.totalIncome)} 元</div>
-      <div>個人捐贈比例：${item.personalRate.toFixed(2)}%</div>
-      <div>營利事業捐贈比例：${item.businessRate.toFixed(2)}%</div>
-      <div>是否當選：${item.electedMark === '*' ? '是' : '否'}</div>
+    node.querySelector('.name').textContent = row.name;
+    partyBadge.textContent = row.party;
+    partyBadge.style.background = partyColor(row.party);
+    node.querySelector('.district').textContent = row.area;
+    node.querySelector('.stats').innerHTML = `
+      <div>得票數：${fmt(row.votes)}</div>
+      <div>得票率：${row.voteRate.toFixed(2)}%</div>
+      <div>總收入：${fmt(row.totalIncome)} 元</div>
+      <div>個人捐贈比例：${row.personalRate.toFixed(2)}%</div>
+      <div>營利事業捐贈比例：${row.businessRate.toFixed(2)}%</div>
+      <div>是否當選：${row.elected ? '是' : '否'}</div>
     `;
 
-    els.resultsList.appendChild(node);
+    if (row.elected) {
+      node.querySelector('.winner-tag').hidden = false;
+      card.style.borderColor = 'rgba(68, 255, 176, 0.65)';
+      card.style.boxShadow = '0 0 22px rgba(68, 255, 176, 0.25)';
+    }
+
+    el.resultsList.appendChild(node);
   });
 
-  const hasMore = state.visibleCount < state.filtered.length;
-  els.loadMoreBtn.hidden = !hasMore;
+  const hasMore = app.visible < app.filtered.length;
+  el.loadMoreBtn.hidden = !hasMore;
+  el.allLoadedMsg.hidden = hasMore;
+
+  observeReveal();
+}
+
+function animateCount(target, from, to, unit = '') {
+  const start = performance.now();
+  const duration = 1100;
+
+  function tick(now) {
+    const p = Math.min((now - start) / duration, 1);
+    const value = from + (to - from) * (1 - Math.pow(1 - p, 3));
+    target.textContent = `${fmt(value)}${unit ? ` ${unit}` : ''}`;
+    if (p < 1) requestAnimationFrame(tick);
+  }
+
+  requestAnimationFrame(tick);
+}
+
+let revealObserver;
+function observeReveal() {
+  if (!revealObserver) {
+    revealObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            revealObserver.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.14 }
+    );
+  }
+
+  document.querySelectorAll('.reveal:not(.visible)').forEach((node) => revealObserver.observe(node));
 }
 
 function bindEvents() {
-  els.searchBtn.addEventListener('click', () => {
-    state.searchTerm = els.searchInput.value.trim();
-    state.visibleCount = 12;
-    applyFiltersAndRender();
+  el.searchInput.addEventListener('input', (e) => {
+    app.search = e.target.value.trim();
+    app.visible = 12;
+    updateList();
   });
 
-  els.searchInput.addEventListener('input', (event) => {
-    state.searchTerm = event.target.value.trim();
-    state.visibleCount = 12;
-    applyFiltersAndRender();
+  el.searchBtn.addEventListener('click', () => {
+    app.search = el.searchInput.value.trim();
+    app.visible = 12;
+    updateList();
   });
 
-  els.sortSelect.addEventListener('change', (event) => {
-    state.sortBy = event.target.value;
-    state.visibleCount = 12;
-    applyFiltersAndRender();
+  el.sortSelect.addEventListener('change', (e) => {
+    app.sort = e.target.value;
+    app.visible = 12;
+    updateList();
   });
 
-  els.loadMoreBtn.addEventListener('click', () => {
-    state.visibleCount += 12;
+  el.loadMoreBtn.addEventListener('click', () => {
+    app.visible += 12;
     renderResults();
   });
 }
